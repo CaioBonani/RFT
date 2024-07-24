@@ -1,13 +1,11 @@
-use std::{env, io::{self, Write}, net::TcpStream, path::PathBuf};
+use std::{env, io::{self, Read, Write, BufWriter}, fs::File, net::TcpStream, path::{Path, PathBuf}};
 use ssh2::Session;
-
 
 struct CurrentPath {
     current_path: PathBuf,
 }
 
 impl CurrentPath {
-
     fn new(initial_path: String) -> Self {
         CurrentPath {
             current_path: PathBuf::from(initial_path),
@@ -15,26 +13,23 @@ impl CurrentPath {
     }
 
     fn change_path(&mut self, new_path: String) {
-        self.current_path = PathBuf::from(self.current_path.join(new_path));
+        self.current_path = self.current_path.join(new_path);
     }
 
-    // fn get_path(&self) -> &PathBuf {
-    //     &self.current_path
-    // }
+    fn get_path(&self) -> &PathBuf {
+        &self.current_path
+    }
 }
 
 fn main() {
-    
     let args: Vec<String> = env::args().collect();
 
-
     if args.len() < 4 {
-
         println!("Uso: {} <hostname> <username> <password>", args[0]);
         return;
     }
 
-    let mut dir =  CurrentPath::new(String::from("."));
+    let mut dir = CurrentPath::new(String::from("."));
 
     let host = &args[1];
     let user = &args[2];
@@ -52,35 +47,91 @@ fn main() {
     let sftp = sess.sftp().unwrap();
 
     loop {
+        
         print!(">> ");
         io::stdout().flush().expect("Failed to flush stdout");
 
         let mut input = String::new();
-        io::stdin().read_line(&mut input)
-            .expect("Failed to read line");
+        io::stdin().read_line(&mut input).expect("Failed to read line");
         let command = input.trim();
 
         if command == "ls" {
 
-            let mut directory = sftp.opendir(&dir.current_path).unwrap();
+            let mut directory = sftp.opendir(dir.get_path()).unwrap();
 
             while let Ok(content) = directory.readdir() {
                 let (entry_path, _) = content;
-                    println!("{}", entry_path.display());
+                println!("{}", entry_path.display());
             }
-        }
 
-        if command.starts_with("cd ") {
+        } else if command.starts_with("cd ") {
 
             let tokens: Vec<&str> = command.split_whitespace().collect();
-            
-            dir.change_path(tokens[1].to_string());
-        }
-        
+            if tokens.len() == 2 {
+                dir.change_path(tokens[1].to_string());
+            } else {
+                println!("Uso: cd <diretório>");
+            }
 
-        if command == "exit" {
+        } else if command.starts_with("get ") {
+
+            let tokens: Vec<&str> = command.split_whitespace().collect();
+
+            if tokens.len() == 3 {
+
+                let remote_file_path = tokens[1];
+                let local_directory = tokens[2];
+
+                if Path::new(remote_file_path).is_absolute() || remote_file_path.contains('/') {
+
+                    println!("Não use caminhos absolutos");
+                    return;
+                }
+
+                let remote_path = dir.get_path().join(remote_file_path);
+
+                // Abra o arquivo remoto
+                match sftp.open(&remote_path) {
+
+                    Ok(mut remote_file) => {
+
+                        let mut file_content = Vec::new();
+
+                        if remote_file.read_to_end(&mut file_content).is_ok() {
+
+                            // Crie o caminho local para salvar o arquivo
+                            let local_file_path = Path::new(local_directory).join(remote_file_path);
+                            
+                            if let Some(parent) = local_file_path.parent() {
+
+                                std::fs::create_dir_all(parent).unwrap();
+                            }
+
+                            // Salve o arquivo localmente
+                            let local_file = File::create(local_file_path).unwrap();
+                            let mut writer = BufWriter::new(local_file);
+
+                            writer.write_all(&file_content).unwrap();
+                            println!("Arquivo baixado com sucesso!");
+
+                        } else {
+
+                            println!("Erro ao ler o arquivo remoto.");
+                        }
+                    }
+                    Err(e) => println!("Erro ao abrir o arquivo remoto: {}", e),
+                }
+            } else {
+
+                println!("Uso: get <arquivo_remoto> <diretório_local>");
+            }
+        } else if command == "exit" {
+
             break;
+
+        } else {
+
+            println!("Comando desconhecido: {}", command);
         }
     }
 }
-
