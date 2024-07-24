@@ -1,4 +1,4 @@
-use std::{env, io::{self, Read, Write, BufWriter}, fs::File, net::TcpStream, path::{Path, PathBuf}};
+use std::{env, fs::File, io::{self, BufReader, BufWriter, Read, Write}, net::TcpStream, path::{Path, PathBuf}};
 use ssh2::Session;
 
 struct CurrentPath {
@@ -121,10 +121,53 @@ fn main() {
                     }
                     Err(e) => println!("Erro ao abrir o arquivo remoto: {}", e),
                 }
+
             } else {
 
                 println!("Uso: get <arquivo_remoto> <diretório_local>");
             }
+
+        } else if command.starts_with("put ") {
+
+            let tokens: Vec<&str> = command.split_whitespace().collect();
+
+            if tokens.len() == 2 {
+
+                let local_file_path = tokens[1];
+                let local_path = PathBuf::from(local_file_path);
+
+                if !(local_path.is_absolute()) {
+    
+                    println!("Use caminhos absolutos para o arquivo local");
+                    return;
+                }
+
+
+                if !local_path.exists() {
+                    println!("Arquivo local não encontrado: {}", local_file_path);
+                    continue;
+                }
+
+                let file_name = local_path.file_name().unwrap().to_str().unwrap();
+                let remote_path = dir.get_path().join(file_name);
+
+                let local_file = File::open(local_path).unwrap();
+                let mut reader = BufReader::new(local_file);
+
+                let mut remote_file = sftp.create(&remote_path).unwrap();
+                let mut buffer = Vec::new();
+                reader.read_to_end(&mut buffer).unwrap();
+                remote_file.write_all(&buffer).unwrap();
+
+                println!("Arquivo enviado com sucesso!");
+
+            } else {
+
+                println!("Uso: put <arquivo_local>");
+            }
+            
+
+        
         } else if command == "exit" {
 
             break;
