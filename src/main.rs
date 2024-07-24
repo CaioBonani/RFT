@@ -17,11 +17,18 @@ fn main() {
     let user = &args[2];
     let passwd = &args[3];
 
-    let (sftp, sess) = commands::connect_ssh(host, user, passwd);
+    match commands::connect_ssh(host, user, passwd) {
 
-    loop {
-        if !commands::execute_command(&sftp, &mut dir) {
-            break;
+        Ok((sftp, _)) => {
+            
+            loop {
+                if !commands::execute_command(&sftp, &mut dir) {
+                    break;
+                }
+            }
         }
-    }
+        Err(e) => {
+            eprint!("{}", e);
+        }
+    };
 }
