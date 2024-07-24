@@ -42,7 +42,7 @@ pub fn execute_command(sftp: &ssh2::Sftp, dir: &mut CurrentPath) -> bool {
         }
         
         _ if command.starts_with("cd ") => {
-            change_directory(command, dir);
+            change_directory(command, sftp, dir);
         }
         
         _ if command.starts_with("get ") => {
@@ -69,10 +69,32 @@ fn list_files(sftp: &ssh2::Sftp, dir: &CurrentPath) {
     }
 }
 
-fn change_directory(command: &str, dir: &mut CurrentPath) {
+fn change_directory(command: &str, sftp: &Sftp, dir: &mut CurrentPath) {
+
     let tokens: Vec<&str> = command.split_whitespace().collect();
+
     if tokens.len() == 2 {
-        dir.change_path(tokens[1].to_string());
+
+        let new_dir = tokens[1];
+        let new_path = dir.get_path().join(new_dir);
+        
+        match sftp.stat(&new_path) {
+
+            Ok(stat) => {
+
+                if stat.is_dir() {
+                    dir.change_path(new_dir.to_string());
+
+                } else {
+                    println!("{} não é um diretório.", new_dir);
+                }
+            }
+
+            Err(e) => {
+                println!("{}: {}", new_dir, e);
+            }
+        }
+
     } else {
         println!("Uso: cd <diretório>");
     }
