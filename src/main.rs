@@ -1,4 +1,4 @@
-use std::{env, fmt::format, io::{self, Read, Write}, net::TcpStream, path::{Path, PathBuf}};
+use std::{env, io::{self, Write}, net::TcpStream, path::PathBuf};
 use ssh2::Session;
 
 
@@ -15,12 +15,12 @@ impl CurrentPath {
     }
 
     fn change_path(&mut self, new_path: String) {
-        self.current_path = PathBuf::from("self.current_path".to_string()+"/"+new_path.as_str());
+        self.current_path = PathBuf::from(self.current_path.join(new_path));
     }
 
-    fn get_path(&self) -> &PathBuf {
-        return  &self.current_path;
-    }
+    // fn get_path(&self) -> &PathBuf {
+    //     &self.current_path
+    // }
 }
 
 fn main() {
@@ -28,13 +28,13 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
 
-    if (args.len() < 4) {
+    if args.len() < 4 {
 
         println!("Uso: {} <hostname> <username> <password>", args[0]);
         return;
     }
 
-    let mut dir =  CurrentPath::new(String::from("/home/caio/github"));
+    let mut dir =  CurrentPath::new(String::from("."));
 
     let host = &args[1];
     let user = &args[2];
@@ -64,22 +64,10 @@ fn main() {
 
             let mut directory = sftp.opendir(&dir.current_path).unwrap();
 
-            let (content, _) = directory.readdir().unwrap();
-
-            println!("{}", content.display());
-
-            while let Ok(content2) = directory.readdir() {
-                let (entry_path, _) = content2;
+            while let Ok(content) = directory.readdir() {
+                let (entry_path, _) = content;
                     println!("{}", entry_path.display());
             }
-
-            // let content = sftp.readdir(&dir.current_path).unwrap();
-
-
-            // for (files, _) in content {
-                
-            //     println!("{}", files.display());
-            // }
         }
 
         if command.starts_with("cd ") {
@@ -88,7 +76,6 @@ fn main() {
             
             dir.change_path(tokens[1].to_string());
         }
-
         
 
         if command == "exit" {
